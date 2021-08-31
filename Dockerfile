@@ -1,11 +1,17 @@
-FROM golang:alpine as builder
-WORKDIR /app
+FROM golang:1.17.0-alpine as builder
+WORKDIR /go/src/app
+ADD . .
+
 RUN apk update && apk upgrade && apk add --no-cache ca-certificates
 RUN update-ca-certificates
 
-FROM scratch
+RUN go get -d -v ./...
+
+RUN go build -o /estafette-gke-node-pool-shifter-v2
+
+FROM golang:1.17.0-alpine
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY estafette-gke-node-pool-shifter-v2 /
+COPY --from=builder /estafette-gke-node-pool-shifter-v2 /go/
 
 CMD ["./estafette-gke-node-pool-shifter-v2"]
