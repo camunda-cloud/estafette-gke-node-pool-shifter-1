@@ -24,17 +24,14 @@ var (
 			Int()
 	kubeConfigPath = kingpin.Flag("kubeconfig", "Provide the path to the kube config path, usually located in ~/.kube/config. For out of cluster execution").
 			Envar("KUBECONFIG").
-			Default("/Users/simon/.kube/config").
 			String()
 	nodePoolFrom = kingpin.Flag("node-pool-from", "The name of the node pool to shift from.").
 			Required().
 			Envar("NODE_POOL_FROM").
-			Default("vm-n1-standard-16").
 			String()
 	nodePoolTo = kingpin.Flag("node-pool-to", "The name of the node pool to shift to.").
 			Required().
 			Envar("NODE_POOL_TO").
-			Default("pvm-n1-standard-16").
 			String()
 	nodePoolFromMinNode = kingpin.Flag("node-pool-from-min-node", "The minimum number of node to keep for the node pool to shift.").
 				Envar("NODE_POOL_FROM_MIN_NODE").
