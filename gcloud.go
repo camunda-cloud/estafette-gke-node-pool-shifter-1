@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	container "google.golang.org/api/container/v1beta1"
 )
@@ -35,14 +34,14 @@ type GCloudClient interface {
 // NewGCloudClient return a GCloud client
 func NewGCloudClient() (gcloud GCloudClient, err error) {
 	ctx := context.Background()
-	client, err := google.DefaultClient(ctx, container.CloudPlatformScope)
+	//client, err := google.DefaultClient(ctx, container.CloudPlatformScope)
 
 	if err != nil {
 		err = fmt.Errorf("Error creating GCloud client:\n%v", err)
 	}
 
 	gcloud = &GCloud{
-		Client:  client,
+		Client:  nil,
 		Context: ctx,
 	}
 
@@ -51,7 +50,8 @@ func NewGCloudClient() (gcloud GCloudClient, err error) {
 
 // NewGCloudContainerClient return a GCloud container client
 func (g *GCloud) NewGCloudContainerClient() (gcloud GCloudContainerClient, err error) {
-	service, err := container.New(g.Client)
+	ctx := context.Background()
+	service, err := container.NewService(ctx)
 
 	if err != nil {
 		err = fmt.Errorf("Error creating GCloud container client:\n%v", err)
@@ -76,8 +76,8 @@ func (g *GCloud) GetProjectDetailsFromNode(providerId string) (err error) {
 	s := strings.Split(providerId, "/")
 
 	g.Project = s[2]
-
-	service, err := compute.New(g.Client)
+	ctx := context.Background()
+	service, err := compute.NewService(ctx)
 
 	if err != nil {
 		err = fmt.Errorf("Error creating GCloud compute client: %v", err)

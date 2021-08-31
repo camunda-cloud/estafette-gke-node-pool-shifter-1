@@ -24,14 +24,17 @@ var (
 			Int()
 	kubeConfigPath = kingpin.Flag("kubeconfig", "Provide the path to the kube config path, usually located in ~/.kube/config. For out of cluster execution").
 			Envar("KUBECONFIG").
+			Default("/Users/simon/.kube/config").
 			String()
 	nodePoolFrom = kingpin.Flag("node-pool-from", "The name of the node pool to shift from.").
 			Required().
 			Envar("NODE_POOL_FROM").
+			Default("vm-n1-standard-16").
 			String()
 	nodePoolTo = kingpin.Flag("node-pool-to", "The name of the node pool to shift to.").
 			Required().
 			Envar("NODE_POOL_TO").
+			Default("pvm-n1-standard-16").
 			String()
 	nodePoolFromMinNode = kingpin.Flag("node-pool-from-min-node", "The minimum number of node to keep for the node pool to shift.").
 				Envar("NODE_POOL_FROM_MIN_NODE").
@@ -161,8 +164,9 @@ func main() {
 				time.Sleep(sleepTime)
 				continue
 			}
+			amountOfRegions := 3
+			nodePoolFromSize := len(nodesFrom.Items) / amountOfRegions
 
-			nodePoolFromSize := len(nodesFrom.Items)
 
 			log.Info().
 				Str("node-pool", *nodePoolFrom).
@@ -175,7 +179,7 @@ func main() {
 			if nodePoolFromSize > *nodePoolFromMinNode && len(nodesFrom.Items) > 0 {
 				log.Info().
 					Str("node-pool", *nodePoolTo).
-					Msg("Attempting to shift one node...")
+					Msg("Attempting to shift one node per region...")
 
 				status = "shifted"
 
@@ -201,13 +205,14 @@ func main() {
 
 // shiftNode safely try to add a new node to a pool then remove a node from another
 func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *apiv1.NodeList) (err error) {
+	amountOfRegions := 3
 	// Add node
-	toCurrentSize := len(to.Items)
+	toCurrentSize := len(to.Items) / amountOfRegions
 	toNewSize := int64(toCurrentSize + 1)
 
 	log.Info().
 		Str("node-pool", toName).
-		Msgf("Adding 1 node to the pool, currently %d node(s), expecting %d node(s)", toCurrentSize, toNewSize)
+		Msgf("Adding 1 node to the pool for each region, currently %d node(s), expecting %d node(s) per region", toCurrentSize, toNewSize)
 
 	err = g.SetNodePoolSize(toName, toNewSize)
 
@@ -220,12 +225,12 @@ func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *apiv1
 	}
 
 	// Remove node
-	fromCurrentSize := len(from.Items)
+	fromCurrentSize := len(from.Items) / amountOfRegions
 	fromNewSize := int64(fromCurrentSize - 1)
 
 	log.Info().
 		Str("node-pool", fromName).
-		Msgf("Removing 1 node from the pool, currently %d node(s), expecting %d node(s)", fromCurrentSize, fromNewSize)
+		Msgf("Removing 1 node from the pool for each region, currently %d node(s), expecting %d node(s) per region", fromCurrentSize, fromNewSize)
 
 	err = g.SetNodePoolSize(fromName, fromNewSize)
 
