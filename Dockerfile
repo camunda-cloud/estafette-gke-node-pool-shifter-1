@@ -9,9 +9,9 @@ RUN go get -d -v ./...
 
 RUN go build -o /estafette-gke-node-pool-shifter-v2
 
-FROM golang:1.17.0-alpine
+FROM gcr.io/distroless/base
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /estafette-gke-node-pool-shifter-v2 /go/
+COPY --from=builder /estafette-gke-node-pool-shifter-v2 /
 
 CMD ["./estafette-gke-node-pool-shifter-v2"]

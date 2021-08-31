@@ -6,3 +6,6 @@ steps:
   - --destination=gcr.io/$PROJECT_ID/$_IMG_NAME:$SHORT_SHA
   - --cache=true
   - --cache-ttl=72h
+
+substitutions:
+  _IMG_NAME: node-pool-shifter
