@@ -9,13 +9,12 @@ require (
 	github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1 // indirect
 	github.com/ericchiang/k8s v0.0.0-20170725150632-85c31b99a193
 	github.com/estafette/estafette-foundation v0.0.52
-	github.com/ghodss/yaml v1.0.0
-	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.6 // indirect
 	github.com/prometheus/client_golang v0.9.2
 	github.com/rs/zerolog v1.17.2
 	github.com/sergi/go-diff v1.0.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
-	google.golang.org/api v0.13.0
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
+	google.golang.org/api v0.20.0
+	k8s.io/api v0.22.1 // indirect
+	k8s.io/apimachinery v0.22.1
+	k8s.io/client-go v0.22.1
 )

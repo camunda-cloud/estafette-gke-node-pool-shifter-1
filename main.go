@@ -1,6 +1,7 @@
 package main
 
 import (
+	v1 "k8s.io/api/core/v1"
 	"os"
 	"runtime"
 	"sync"
@@ -9,8 +10,6 @@ import (
 	"github.com/alecthomas/kingpin"
 	foundation "github.com/estafette/estafette-foundation"
 	"github.com/rs/zerolog/log"
-
-	apiv1 "github.com/ericchiang/k8s/api/v1"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -92,7 +91,6 @@ func main() {
 
 	// create GCloud Client
 	gcloud, err := NewGCloudClient()
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error creating GCloud client")
 	}
@@ -108,7 +106,11 @@ func main() {
 		log.Fatal().Msg("Error there is no node in the cluster")
 	}
 
-	gcloud.GetProjectDetailsFromNode(*nodes.Items[0].Spec.ProviderID)
+	regions, err := kubernetes.GetRegions(*nodePoolTo)
+
+	log.Printf("%v", regions)
+
+	err = gcloud.GetProjectDetailsFromNode(nodes.Items[0].Spec.ProviderID)
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error getting project details from node; are you running this in GKE?")
@@ -161,9 +163,15 @@ func main() {
 				time.Sleep(sleepTime)
 				continue
 			}
-			amountOfRegions := 3
-			nodePoolFromSize := len(nodesFrom.Items) / amountOfRegions
 
+			amountOfRegions, err:= kubernetes.GetRegions(*nodePoolTo)
+
+			if err != nil {
+				log.Error().Err(err).Str("node-pool", *nodePoolTo).Msg("error while determining regions")
+				continue
+			}
+
+			nodePoolFromSize := len(nodesFrom.Items) / len(amountOfRegions)
 
 			log.Info().
 				Str("node-pool", *nodePoolFrom).
@@ -201,7 +209,7 @@ func main() {
 }
 
 // shiftNode safely try to add a new node to a pool then remove a node from another
-func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *apiv1.NodeList) (err error) {
+func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *v1.NodeList) (err error) {
 	amountOfRegions := 3
 	// Add node
 	toCurrentSize := len(to.Items) / amountOfRegions
@@ -211,8 +219,11 @@ func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *apiv1
 		Str("node-pool", toName).
 		Msgf("Adding 1 node to the pool for each region, currently %d node(s), expecting %d node(s) per region", toCurrentSize, toNewSize)
 
+	// Todo: compute expected Amount of nodes
+
 	err = g.SetNodePoolSize(toName, toNewSize)
 
+	// Todo: if expected amount of nodes not met -> error and do not scale vm node pool
 	if err != nil {
 		log.Error().
 			Err(err).
