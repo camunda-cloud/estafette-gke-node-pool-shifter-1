@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+
 	"github.com/rs/zerolog/log"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-    "k8s.io/apimachinery/pkg/labels"
 )
 
 type K8s struct {
@@ -24,7 +25,7 @@ type KubernetesClient interface {
 	GetRegions(string) ([]int, error)
 }
 
-// NewKubernetesClient return a Kubernetes client
+// NewKubernetesClient returns a Kubernetes client
 func NewKubernetesClient(host string, port string, namespace string, kubeConfigPath string) (k8s KubernetesClient, err error) {
 	var client *kubernetes.Clientset
 
@@ -66,8 +67,8 @@ func (k *K8s) GetNodeList(name string) (nodes *v1.NodeList, err error) {
 
 	if name != "" {
 		selector := map[string]string{
-				"cloud.google.com/gke-nodepool": name,
-			}
+			"cloud.google.com/gke-nodepool": name,
+		}
 		ls := labels.SelectorFromSet(selector)
 		opts.LabelSelector = ls.String()
 	}
@@ -75,7 +76,6 @@ func (k *K8s) GetNodeList(name string) (nodes *v1.NodeList, err error) {
 	nodes, err = k.Client.CoreV1().Nodes().List(k.Context, opts)
 	return
 }
-
 
 // GetRegions returns the list of region names, useful determine the amount of regions
 func (k *K8s) GetRegions(name string) (regions []int, err error) {
@@ -86,7 +86,7 @@ func (k *K8s) GetRegions(name string) (regions []int, err error) {
 
 	for _, zone := range zones {
 		selector := map[string]string{
-			"cloud.google.com/gke-nodepool": name,
+			"cloud.google.com/gke-nodepool":          name,
 			"failure-domain.beta.kubernetes.io/zone": zone,
 		}
 		ls := labels.SelectorFromSet(selector)

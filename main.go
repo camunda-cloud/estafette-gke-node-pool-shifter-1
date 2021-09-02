@@ -1,11 +1,12 @@
 package main
 
 import (
-	v1 "k8s.io/api/core/v1"
 	"os"
 	"runtime"
 	"sync"
 	"time"
+
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/alecthomas/kingpin"
 	foundation "github.com/estafette/estafette-foundation"
@@ -102,6 +103,8 @@ func main() {
 		log.Fatal().Err(err).Msg("Error while getting the list of nodes")
 	}
 
+	log.Printf("nodes %v", nodes)
+
 	if len(nodes.Items) == 0 {
 		log.Fatal().Msg("Error there is no node in the cluster")
 	}
@@ -164,7 +167,7 @@ func main() {
 				continue
 			}
 
-			amountOfRegions, err:= kubernetes.GetRegions(*nodePoolTo)
+			amountOfRegions, err := kubernetes.GetRegions(*nodePoolTo)
 
 			if err != nil {
 				log.Error().Err(err).Str("node-pool", *nodePoolTo).Msg("error while determining regions")
