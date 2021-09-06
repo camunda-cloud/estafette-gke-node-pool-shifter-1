@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"golang.org/x/oauth2/google"
 	"net/http"
 	"strings"
 
@@ -34,14 +35,14 @@ type GCloudClient interface {
 // NewGCloudClient return a GCloud client
 func NewGCloudClient() (gcloud GCloudClient, err error) {
 	ctx := context.Background()
-	//client, err := google.DefaultClient(ctx, container.CloudPlatformScope)
+	client, err := google.DefaultClient(ctx, container.CloudPlatformScope)
 
 	if err != nil {
 		err = fmt.Errorf("Error creating GCloud client:\n%v", err)
 	}
 
 	gcloud = &GCloud{
-		Client:  nil,
+		Client:  client,
 		Context: ctx,
 	}
 
@@ -87,7 +88,7 @@ func (g *GCloud) GetProjectDetailsFromNode(providerId string) (err error) {
 	node, err := service.Instances.Get(g.Project, s[3], s[4]).Context(g.Context).Do()
 
 	if err != nil {
-		err = fmt.Errorf("Error retrieving instance details from GCloud: %v", err)
+		err = fmt.Errorf("error retrieving instance details from GCloud: %v", err)
 		return
 	}
 
