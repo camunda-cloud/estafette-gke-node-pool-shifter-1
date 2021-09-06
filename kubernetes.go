@@ -110,7 +110,7 @@ func (k *K8s) GetZones(name string) (zones []int, err error) {
 func (k *K8s) determineZones(name string) (zones []string, err error) {
 	opts := metav1.ListOptions{}
 	selector := map[string]string{
-		"cloud.google.com/gke-nodepool":          name,
+		"cloud.google.com/gke-nodepool": name,
 	}
 	ls := labels.SelectorFromSet(selector)
 	opts.LabelSelector = ls.String()
