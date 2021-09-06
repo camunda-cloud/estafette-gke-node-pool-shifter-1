@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
-
 	"github.com/alecthomas/kingpin"
 	foundation "github.com/estafette/estafette-foundation"
 	"github.com/rs/zerolog/log"
@@ -22,6 +20,10 @@ var (
 			Default("300").
 			Short('i').
 			Int()
+	cycleTime = kingpin.Flag("cycle-time", "Time between node pool operations").
+		Envar("CYCLE_TIME").
+		Default("10").Short('c').
+		Int()
 	kubeConfigPath = kingpin.Flag("kubeconfig", "Provide the path to the kube config path, usually located in ~/.kube/config. For out of cluster execution").
 			Envar("KUBECONFIG").
 			String()
@@ -152,7 +154,7 @@ func main() {
 				continue
 			}
 
-			nodesTo, err := kubernetes.GetNodeList(*nodePoolTo)
+			//nodesTo, err := kubernetes.GetNodeList(*nodePoolTo)
 
 			if err != nil {
 				log.Error().
@@ -178,7 +180,7 @@ func main() {
 
 			log.Info().
 				Str("node-pool", *nodePoolFrom).
-				Msgf("Node pool has %d node(s), minimun wanted: %d node(s)", nodePoolFromSize, *nodePoolFromMinNode)
+				Msgf("Node pool has %d node(s) per region, minimun wanted: %d node(s)", nodePoolFromSize, *nodePoolFromMinNode)
 
 			// prometheus status
 			status := "skipped"
@@ -192,18 +194,27 @@ func main() {
 				status = "shifted"
 
 				waitGroup.Add(1)
-				if err := shiftNode(gcloudContainerClient, *nodePoolFrom, *nodePoolTo, nodesFrom, nodesTo); err != nil {
+
+				// This computes the maximum number of the preemptible node pool to scale
+				nodesTo, _ := kubernetes.GetRegions(*nodePoolTo)
+				_, maxTo := FindMinAndMax(nodesTo)
+
+				// This computes the maximum number of the vm node pool to scale
+				nodesFrom, _ := kubernetes.GetRegions(*nodePoolFrom)
+				_, maxFrom := FindMinAndMax(nodesFrom)
+
+				if err := shiftNode(gcloudContainerClient, kubernetes, *nodePoolFrom, *nodePoolTo, maxFrom, maxTo); err != nil {
 					status = "failed"
 				}
-				waitGroup.Done()
 
 				// interval between actions, leverage provider requests when
 				// another operation is already operating on the cluster
-				sleepTime = time.Duration(ApplyJitter(10)) * time.Second
+				sleepTime = time.Duration(ApplyJitter(*cycleTime)) * time.Second
+				waitGroup.Done()
 			}
 
 			nodeTotals.With(prometheus.Labels{"status": status}).Inc()
-			log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
+			log.Info().Msgf("One cycle done, sleeping for %v seconds...", sleepTime)
 			time.Sleep(sleepTime)
 		}
 	}(waitGroup)
@@ -212,21 +223,17 @@ func main() {
 }
 
 // shiftNode safely try to add a new node to a pool then remove a node from another
-func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *v1.NodeList) (err error) {
-	amountOfRegions := 3
+func shiftNode(g GCloudContainerClient, k KubernetesClient, fromName, toName string, from, to int) (err error) {
 	// Add node
-	toCurrentSize := len(to.Items) / amountOfRegions
+	toCurrentSize := to
 	toNewSize := int64(toCurrentSize + 1)
 
 	log.Info().
 		Str("node-pool", toName).
 		Msgf("Adding 1 node to the pool for each region, currently %d node(s), expecting %d node(s) per region", toCurrentSize, toNewSize)
 
-	// Todo: compute expected Amount of nodes
-
 	err = g.SetNodePoolSize(toName, toNewSize)
 
-	// Todo: if expected amount of nodes not met -> error and do not scale vm node pool
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -235,8 +242,24 @@ func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *v1.No
 		return
 	}
 
+	nodes, err := k.GetRegions(toName)
+	actualNodeCount := Sum(nodes)
+	amountOfRegions := int64(len(nodes))
+	expectedNodeCount := toNewSize * amountOfRegions
+
+	log.Info().
+		Str("node-pool", toName).
+		Msgf("node pool sizes after resize actual: %d , expected: %d", actualNodeCount, expectedNodeCount)
+
+	if expectedNodeCount < int64(actualNodeCount) {
+		log.Error().
+			Str("node-pool", toName).
+			Msgf("node pool has less nodes than expected after resize actual: %d , expected: %d", actualNodeCount, expectedNodeCount)
+		return
+	}
+
 	// Remove node
-	fromCurrentSize := len(from.Items) / amountOfRegions
+	fromCurrentSize := from
 	fromNewSize := int64(fromCurrentSize - 1)
 
 	log.Info().
@@ -254,3 +277,4 @@ func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *v1.No
 
 	return
 }
+

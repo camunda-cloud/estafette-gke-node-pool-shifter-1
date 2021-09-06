@@ -66,8 +66,6 @@ github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153/go.mod h1:/Zj4wYkg
 github.com/emicklei/go-restful v0.0.0-20170410110728-ff4f55a20633/go.mod h1:otzb+WCGbkyDHkqmQmT5YD2WR4BBwUdeQoFo8l/7tVs=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
-github.com/ericchiang/k8s v0.0.0-20170725150632-85c31b99a193 h1:u+lHWzgg4ERLJzw2rS0fWP/XPDN8JwsQMZzjWQyqYr0=
-github.com/ericchiang/k8s v0.0.0-20170725150632-85c31b99a193/go.mod h1:/OmBgSq2cd9IANnsGHGlEz27nwMZV2YxlpXuQtU3Bz4=
 github.com/estafette/estafette-foundation v0.0.52 h1:CVkQ4o6C4kTWm1+CM5Z8eQ8KsuiVg3iUlP3Q/hXWgys=
 github.com/estafette/estafette-foundation v0.0.52/go.mod h1:3tosAek4nyGDaWbi9dz2jSb2Wa4dAtLw/7c7mDWwaLA=
 github.com/evanphx/json-patch v4.11.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
