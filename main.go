@@ -21,9 +21,9 @@ var (
 			Short('i').
 			Int()
 	cycleTime = kingpin.Flag("cycle-time", "Time between node pool operations").
-		Envar("CYCLE_TIME").
-		Default("10").Short('c').
-		Int()
+			Envar("CYCLE_TIME").
+			Default("10").Short('c').
+			Int()
 	kubeConfigPath = kingpin.Flag("kubeconfig", "Provide the path to the kube config path, usually located in ~/.kube/config. For out of cluster execution").
 			Envar("KUBECONFIG").
 			String()
@@ -277,4 +277,3 @@ func shiftNode(g GCloudContainerClient, k KubernetesClient, fromName, toName str
 
 	return
 }
-
