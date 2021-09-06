@@ -211,9 +211,8 @@ func main() {
 }
 
 // shiftNode safely try to add a new node to a pool then remove a node from another
-func shiftNode(g GCloudContainerClient, k KubernetesClient, fromName, toName string, from, to int) (err error) {
+func shiftNode(g GCloudContainerClient, k KubernetesClient, fromName, toName string, fromCurrentSize, toCurrentSize int) (err error) {
 	// Add node
-	toCurrentSize := to
 	toNewSize := int64(toCurrentSize + 1)
 
 	log.Info().
@@ -247,7 +246,6 @@ func shiftNode(g GCloudContainerClient, k KubernetesClient, fromName, toName str
 	}
 
 	// Remove node
-	fromCurrentSize := from
 	fromNewSize := int64(fromCurrentSize - 1)
 
 	log.Info().
