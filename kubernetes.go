@@ -22,7 +22,7 @@ type K8s struct {
 type KubernetesClient interface {
 	GetNode(string) (*v1.Node, error)
 	GetNodeList(string) (*v1.NodeList, error)
-	GetRegions(string) ([]int, error)
+	GetZones(string) ([]int, error)
 }
 
 // NewKubernetesClient returns a Kubernetes client
@@ -77,14 +77,17 @@ func (k *K8s) GetNodeList(name string) (nodes *v1.NodeList, err error) {
 	return
 }
 
-// GetRegions returns the list of region names, useful determine the amount of regions
-func (k *K8s) GetRegions(name string) (regions []int, err error) {
-	regions = []int{}
+// GetZones returns a list with the count of nodes per zone
+func (k *K8s) GetZones(name string) (zones []int, err error) {
+	zones = []int{}
 	opts := metav1.ListOptions{}
-	zones := []string{"europe-west1-b", "europe-west1-c", "europe-west1-d"}
+	availableZones, err := k.determineZones(name)
+	if err != nil {
+		return nil, err
+	}
 	var nodes *v1.NodeList
 
-	for _, zone := range zones {
+	for _, zone := range availableZones {
 		selector := map[string]string{
 			"cloud.google.com/gke-nodepool":          name,
 			"failure-domain.beta.kubernetes.io/zone": zone,
@@ -95,10 +98,39 @@ func (k *K8s) GetRegions(name string) (regions []int, err error) {
 		if err != nil {
 			return
 		}
-		regions = append(regions, len(nodes.Items))
+		zones = append(zones, len(nodes.Items))
 
 	}
 
+	return
+}
+
+// determineZones returns a slice with the zones of a node pool e.g.
+// ["europe-west1-d", "europe-west1-c", "europe-west1-a"]
+func (k *K8s) determineZones(name string) (zones []string, err error) {
+	opts := metav1.ListOptions{}
+	selector := map[string]string{
+		"cloud.google.com/gke-nodepool":          name,
+	}
+	ls := labels.SelectorFromSet(selector)
+	opts.LabelSelector = ls.String()
+	nodes, err := k.Client.CoreV1().Nodes().List(k.Context, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	zoneMap := make(map[string]bool)
+	for _, node := range nodes.Items {
+		zone := node.Labels["failure-domain.beta.kubernetes.io/zone"]
+		zoneMap[zone] = true
+	}
+	return mapKeysToArray(zoneMap), nil
+}
+
+func mapKeysToArray(zoneMap map[string]bool) (availableZones []string) {
+	for k, _ := range zoneMap {
+		availableZones = append(availableZones, k)
+	}
 	return
 }
 

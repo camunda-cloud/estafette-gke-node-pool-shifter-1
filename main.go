@@ -105,15 +105,9 @@ func main() {
 		log.Fatal().Err(err).Msg("Error while getting the list of nodes")
 	}
 
-	log.Printf("nodes %v", nodes)
-
 	if len(nodes.Items) == 0 {
 		log.Fatal().Msg("Error there is no node in the cluster")
 	}
-
-	regions, err := kubernetes.GetRegions(*nodePoolTo)
-
-	log.Printf("%v", regions)
 
 	err = gcloud.GetProjectDetailsFromNode(nodes.Items[0].Spec.ProviderID)
 
@@ -154,13 +148,14 @@ func main() {
 				continue
 			}
 
-			//nodesTo, err := kubernetes.GetNodeList(*nodePoolTo)
+			zoneInfo, err := kubernetes.GetZones(*nodePoolTo)
 
 			if err != nil {
 				log.Error().
 					Err(err).
 					Str("node-pool", *nodePoolTo).
-					Msg("Error while getting the list of nodes")
+					Msg("error while determining zones")
+
 				log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
 
 				nodeTotals.With(prometheus.Labels{"status": "failed"}).Inc()
@@ -169,14 +164,7 @@ func main() {
 				continue
 			}
 
-			amountOfRegions, err := kubernetes.GetRegions(*nodePoolTo)
-
-			if err != nil {
-				log.Error().Err(err).Str("node-pool", *nodePoolTo).Msg("error while determining regions")
-				continue
-			}
-
-			nodePoolFromSize := len(nodesFrom.Items) / len(amountOfRegions)
+			nodePoolFromSize := len(nodesFrom.Items) / len(zoneInfo)
 
 			log.Info().
 				Str("node-pool", *nodePoolFrom).
@@ -196,11 +184,11 @@ func main() {
 				waitGroup.Add(1)
 
 				// This computes the maximum number of the preemptible node pool to scale
-				nodesTo, _ := kubernetes.GetRegions(*nodePoolTo)
+				nodesTo, _ := kubernetes.GetZones(*nodePoolTo)
 				_, maxTo := FindMinAndMax(nodesTo)
 
 				// This computes the maximum number of the vm node pool to scale
-				nodesFrom, _ := kubernetes.GetRegions(*nodePoolFrom)
+				nodesFrom, _ := kubernetes.GetZones(*nodePoolFrom)
 				_, maxFrom := FindMinAndMax(nodesFrom)
 
 				if err := shiftNode(gcloudContainerClient, kubernetes, *nodePoolFrom, *nodePoolTo, maxFrom, maxTo); err != nil {
@@ -242,10 +230,10 @@ func shiftNode(g GCloudContainerClient, k KubernetesClient, fromName, toName str
 		return
 	}
 
-	nodes, err := k.GetRegions(toName)
-	actualNodeCount := Sum(nodes)
-	amountOfRegions := int64(len(nodes))
-	expectedNodeCount := toNewSize * amountOfRegions
+	zoneInfo, err := k.GetZones(toName)
+	actualNodeCount := Sum(zoneInfo)
+	amountOfZones := int64(len(zoneInfo))
+	expectedNodeCount := toNewSize * amountOfZones
 
 	log.Info().
 		Str("node-pool", toName).
