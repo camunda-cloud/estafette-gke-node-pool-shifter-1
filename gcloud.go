@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"golang.org/x/oauth2/google"
 	"net/http"
 	"strings"
 
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	container "google.golang.org/api/container/v1beta1"
 )
@@ -51,7 +51,8 @@ func NewGCloudClient() (gcloud GCloudClient, err error) {
 
 // NewGCloudContainerClient return a GCloud container client
 func (g *GCloud) NewGCloudContainerClient() (gcloud GCloudContainerClient, err error) {
-	service, err := container.New(g.Client)
+	ctx := context.Background()
+	service, err := container.NewService(ctx)
 
 	if err != nil {
 		err = fmt.Errorf("Error creating GCloud container client:\n%v", err)
@@ -76,8 +77,8 @@ func (g *GCloud) GetProjectDetailsFromNode(providerId string) (err error) {
 	s := strings.Split(providerId, "/")
 
 	g.Project = s[2]
-
-	service, err := compute.New(g.Client)
+	ctx := context.Background()
+	service, err := compute.NewService(ctx)
 
 	if err != nil {
 		err = fmt.Errorf("Error creating GCloud compute client: %v", err)
@@ -87,7 +88,7 @@ func (g *GCloud) GetProjectDetailsFromNode(providerId string) (err error) {
 	node, err := service.Instances.Get(g.Project, s[3], s[4]).Context(g.Context).Do()
 
 	if err != nil {
-		err = fmt.Errorf("Error retrieving instance details from GCloud: %v", err)
+		err = fmt.Errorf("error retrieving instance details from GCloud: %v", err)
 		return
 	}
 

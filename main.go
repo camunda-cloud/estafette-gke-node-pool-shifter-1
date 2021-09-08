@@ -10,8 +10,6 @@ import (
 	foundation "github.com/estafette/estafette-foundation"
 	"github.com/rs/zerolog/log"
 
-	apiv1 "github.com/ericchiang/k8s/api/v1"
-
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -21,6 +19,10 @@ var (
 			Envar("INTERVAL").
 			Default("300").
 			Short('i').
+			Int()
+	cycleTime = kingpin.Flag("cycle-time", "Time between node pool operations").
+			Envar("CYCLE_TIME").
+			Default("10").Short('c').
 			Int()
 	kubeConfigPath = kingpin.Flag("kubeconfig", "Provide the path to the kube config path, usually located in ~/.kube/config. For out of cluster execution").
 			Envar("KUBECONFIG").
@@ -92,7 +94,6 @@ func main() {
 
 	// create GCloud Client
 	gcloud, err := NewGCloudClient()
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error creating GCloud client")
 	}
@@ -108,7 +109,7 @@ func main() {
 		log.Fatal().Msg("Error there is no node in the cluster")
 	}
 
-	gcloud.GetProjectDetailsFromNode(*nodes.Items[0].Spec.ProviderID)
+	err = gcloud.GetProjectDetailsFromNode(nodes.Items[0].Spec.ProviderID)
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error getting project details from node; are you running this in GKE?")
@@ -147,13 +148,14 @@ func main() {
 				continue
 			}
 
-			nodesTo, err := kubernetes.GetNodeList(*nodePoolTo)
+			zoneInfo, err := kubernetes.GetZones(*nodePoolTo)
 
 			if err != nil {
 				log.Error().
 					Err(err).
 					Str("node-pool", *nodePoolTo).
-					Msg("Error while getting the list of nodes")
+					Msg("error while determining zones")
+
 				log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
 
 				nodeTotals.With(prometheus.Labels{"status": "failed"}).Inc()
@@ -162,11 +164,11 @@ func main() {
 				continue
 			}
 
-			nodePoolFromSize := len(nodesFrom.Items)
+			nodePoolFromSize := len(nodesFrom.Items) / len(zoneInfo)
 
 			log.Info().
 				Str("node-pool", *nodePoolFrom).
-				Msgf("Node pool has %d node(s), minimun wanted: %d node(s)", nodePoolFromSize, *nodePoolFromMinNode)
+				Msgf("Node pool has %d node(s) per region, minimun wanted: %d node(s)", nodePoolFromSize, *nodePoolFromMinNode)
 
 			// prometheus status
 			status := "skipped"
@@ -175,23 +177,32 @@ func main() {
 			if nodePoolFromSize > *nodePoolFromMinNode && len(nodesFrom.Items) > 0 {
 				log.Info().
 					Str("node-pool", *nodePoolTo).
-					Msg("Attempting to shift one node...")
+					Msg("Attempting to shift one node per region...")
 
 				status = "shifted"
 
 				waitGroup.Add(1)
-				if err := shiftNode(gcloudContainerClient, *nodePoolFrom, *nodePoolTo, nodesFrom, nodesTo); err != nil {
+
+				// This computes the maximum number of the preemptible node pool to scale
+				nodesTo, _ := kubernetes.GetZones(*nodePoolTo)
+				_, maxTo := FindMinAndMax(nodesTo)
+
+				// This computes the maximum number of the vm node pool to scale
+				nodesFrom, _ := kubernetes.GetZones(*nodePoolFrom)
+				_, maxFrom := FindMinAndMax(nodesFrom)
+
+				if err := shiftNode(gcloudContainerClient, kubernetes, *nodePoolFrom, *nodePoolTo, maxFrom, maxTo); err != nil {
 					status = "failed"
 				}
-				waitGroup.Done()
 
 				// interval between actions, leverage provider requests when
 				// another operation is already operating on the cluster
-				sleepTime = time.Duration(ApplyJitter(10)) * time.Second
+				sleepTime = time.Duration(ApplyJitter(*cycleTime)) * time.Second
+				waitGroup.Done()
 			}
 
 			nodeTotals.With(prometheus.Labels{"status": status}).Inc()
-			log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
+			log.Info().Msgf("One cycle done, sleeping for %v seconds...", sleepTime)
 			time.Sleep(sleepTime)
 		}
 	}(waitGroup)
@@ -200,14 +211,13 @@ func main() {
 }
 
 // shiftNode safely try to add a new node to a pool then remove a node from another
-func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *apiv1.NodeList) (err error) {
+func shiftNode(g GCloudContainerClient, k KubernetesClient, fromName, toName string, fromCurrentSize, toCurrentSize int) (err error) {
 	// Add node
-	toCurrentSize := len(to.Items)
 	toNewSize := int64(toCurrentSize + 1)
 
 	log.Info().
 		Str("node-pool", toName).
-		Msgf("Adding 1 node to the pool, currently %d node(s), expecting %d node(s)", toCurrentSize, toNewSize)
+		Msgf("Adding 1 node to the pool for each region, currently %d node(s), expecting %d node(s) per region", toCurrentSize, toNewSize)
 
 	err = g.SetNodePoolSize(toName, toNewSize)
 
@@ -219,13 +229,28 @@ func shiftNode(g GCloudContainerClient, fromName, toName string, from, to *apiv1
 		return
 	}
 
+	zoneInfo, err := k.GetZones(toName)
+	actualNodeCount := Sum(zoneInfo)
+	amountOfZones := int64(len(zoneInfo))
+	expectedNodeCount := toNewSize * amountOfZones
+
+	log.Info().
+		Str("node-pool", toName).
+		Msgf("node pool sizes after resize actual: %d , expected: %d", actualNodeCount, expectedNodeCount)
+
+	if expectedNodeCount < int64(actualNodeCount) {
+		log.Error().
+			Str("node-pool", toName).
+			Msgf("node pool has less nodes than expected after resize actual: %d , expected: %d", actualNodeCount, expectedNodeCount)
+		return
+	}
+
 	// Remove node
-	fromCurrentSize := len(from.Items)
 	fromNewSize := int64(fromCurrentSize - 1)
 
 	log.Info().
 		Str("node-pool", fromName).
-		Msgf("Removing 1 node from the pool, currently %d node(s), expecting %d node(s)", fromCurrentSize, fromNewSize)
+		Msgf("Removing 1 node from the pool for each region, currently %d node(s), expecting %d node(s) per region", fromCurrentSize, fromNewSize)
 
 	err = g.SetNodePoolSize(fromName, fromNewSize)
 
