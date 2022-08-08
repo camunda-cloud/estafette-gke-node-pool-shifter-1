@@ -1,0 +1,43 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set metadata
+        id: metadata
+        run: | 
+          echo "::set-output name=sha_short::$(git rev-parse --short=7 ${{ github.sha }})"
+
+      - name: Google Cloud authentication & tools
+        if: ${{ github.ref_name == 'main' }}
+        uses: camunda-cloud/action-setup-gcloud@v2.0.0
+        with:
+          account-alias: camunda-cloud-240911
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: gcr.io/camunda-cloud-240911/node-pool-shifter:${{ steps.metadata.outputs.sha_short }}
+
+      # Reauthenticate to push on the shared Docker registry.
+      - name: Google Cloud authentication - registry
+        if: ${{ github.ref_name == 'main' }}
+        uses: camunda-cloud/action-google-auth@v1
+        with:
+          account-alias: registry
+
+      - name: Push to shared registry
+        if: ${{ github.ref_name == 'main' }}
+        run: |
+          origin_image="gcr.io/camunda-cloud-240911/node-pool-shifter:${{ steps.metadata.outputs.sha_short }}"
+          shared_image="gcr.io/camunda-saas-registry/node-pool-shifter:${{ steps.metadata.outputs.sha_short }}"
+          docker tag "$origin_image" "$shared_image"
+          docker push "$shared_image"
